@@ -155,8 +155,8 @@ export const googleOAuthCallback = async (req: Request, res: Response): Promise<
     const token = signToken({ userId: user.id, email: user.email, roles: roleIds });
     res.cookie('token', token, COOKIE_OPTIONS);
 
-    // Redirect to frontend dashboard/home
-    res.redirect(`${FRONTEND_URL}/`);
+    // Redirect to frontend dashboard/home with token in query params
+    res.redirect(`${FRONTEND_URL}/?token=${token}`);
   } catch (error: any) {
     console.error('❌ Google OAuth callback error:', error.message);
     res.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
