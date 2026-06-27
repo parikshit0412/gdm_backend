@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: gdm-backend
+    env: node
+    plan: free
+    region: ohio
+    branch: main
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    envVars:
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+      # The following variables will need to be provided in the Render dashboard manually
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: "7d"
+      - key: ALLOWED_ORIGINS
+        value: "https://your-vercel-frontend-url.vercel.app,http://localhost:3000"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
