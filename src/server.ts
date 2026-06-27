@@ -15,6 +15,9 @@ import { errorHandler, notFound } from './middleware/error.middleware';
 const app = express();
 const PORT = process.env.PORT ?? 5000;
 
+// Trust proxies (Render, Vercel, etc.) so that secure cookies are properly processed
+app.set('trust proxy', 1);
+
 // ─── Global Middleware ────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173').split(',');
 
