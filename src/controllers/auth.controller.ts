@@ -6,10 +6,11 @@ import { db } from '../db';
 import { users, userRoles } from '../db/schema';
 import { JwtPayload } from '../middleware/auth.middleware';
 
+const isProd = process.env.NODE_ENV === 'production';
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const, // Changed from 'strict' to 'lax' to allow OAuth redirects to carry cookies
+  secure: isProd, // Must be true if sameSite is none
+  sameSite: isProd ? ('none' as const) : ('lax' as const), 
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
@@ -132,11 +133,12 @@ export const me = async (req: Request, res: Response): Promise<void> => {
 
 // GET /api/auth/google/callback
 export const googleOAuthCallback = async (req: Request, res: Response): Promise<void> => {
+  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
   try {
     // req.user is set by Passport's Google Strategy
     const user = req.user as any; 
     if (!user) {
-      res.redirect('http://localhost:3000/login?error=oauth_failed');
+      res.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
       return;
     }
 
@@ -148,9 +150,9 @@ export const googleOAuthCallback = async (req: Request, res: Response): Promise<
     res.cookie('token', token, COOKIE_OPTIONS);
 
     // Redirect to frontend dashboard/home
-    res.redirect('http://localhost:3000/');
+    res.redirect(`${FRONTEND_URL}/`);
   } catch (error: any) {
     console.error('❌ Google OAuth callback error:', error.message);
-    res.redirect('http://localhost:3000/login?error=oauth_failed');
+    res.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
   }
 };
