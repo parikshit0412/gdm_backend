@@ -45,6 +45,28 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
   }
 };
 
+export const optionalAuthenticate = (req: Request, _res: Response, next: NextFunction): void => {
+  try {
+    let token: string | undefined;
+    if (req.cookies?.token) {
+      token = req.cookies.token as string;
+    }
+    const authHeader = req.headers.authorization;
+    if (!token && authHeader?.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+
+    if (token) {
+      const secret = process.env.JWT_SECRET!;
+      const decoded = jwt.verify(token, secret) as JwtPayload;
+      req.user = decoded;
+    }
+  } catch {
+    // Ignore invalid tokens for optional authentication
+  }
+  next();
+};
+
 /**
  * Role-based guard middleware factory.
  * Pass required role IDs — user must have AT LEAST ONE.

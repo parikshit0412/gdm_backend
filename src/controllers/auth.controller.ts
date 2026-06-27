@@ -106,14 +106,20 @@ export const logout = (_req: Request, res: Response): void => {
 // GET /api/auth/me
 export const me = async (req: Request, res: Response): Promise<void> => {
   try {
-    const [user] = await db.select().from(users).where(eq(users.id, req.user!.userId)).limit(1);
+    if (!req.user) {
+      res.json({ success: true, authenticated: false, data: null });
+      return;
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, req.user.userId)).limit(1);
     if (!user) {
-      res.status(404).json({ success: false, message: 'User not found' });
+      res.json({ success: true, authenticated: false, data: null });
       return;
     }
 
     res.json({
       success: true,
+      authenticated: true,
       data: {
         id: user.id,
         email: user.email,
@@ -121,7 +127,7 @@ export const me = async (req: Request, res: Response): Promise<void> => {
         avatarUrl: user.avatarUrl,
         jobApplyCount: user.jobApplyCount,
         jobPostCount: user.jobPostCount,
-        roles: req.user!.roles,
+        roles: req.user.roles,
         createdAt: user.createdAt,
       },
     });

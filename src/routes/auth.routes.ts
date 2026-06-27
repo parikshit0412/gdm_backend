@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { register, login, logout, me, googleOAuthCallback } from '../controllers/auth.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { registerSchema, loginSchema } from '../validators/schemas';
 
@@ -12,7 +12,7 @@ const router = Router();
 router.post('/register', validate(registerSchema), register);
 router.post('/login', validate(loginSchema), login);
 router.post('/logout', logout);
-router.get('/me', authenticate, me);
+router.get('/me', optionalAuthenticate, me);
 
 // Google OAuth
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
