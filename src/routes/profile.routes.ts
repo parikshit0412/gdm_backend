@@ -11,6 +11,7 @@ import {
 } from '../controllers/profile.controller';
 import { authenticate, requireRole, ROLES } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
+import { upload } from '../middleware/upload.middleware';
 import {
   jobSeekerProfileSchema,
   employerProfileSchema,
@@ -30,6 +31,7 @@ router.put(
   '/job-seeker',
   authenticate,
   requireRole(ROLES.JOB_SEEKER, ROLES.SUPER_USER),
+  upload.fields([{ name: 'resume', maxCount: 1 }, { name: 'avatar', maxCount: 1 }]),
   validate(jobSeekerProfileSchema),
   upsertJobSeekerProfile
 );
@@ -47,6 +49,7 @@ router.put(
   '/employer',
   authenticate,
   requireRole(ROLES.JOB_POSTER, ROLES.SUPER_USER),
+  upload.fields([{ name: 'logo', maxCount: 1 }]),
   validate(employerProfileSchema),
   upsertEmployerProfile
 );
@@ -64,6 +67,7 @@ router.put(
   '/business-promoter',
   authenticate,
   requireRole(ROLES.BUSINESS_PROMOTER, ROLES.SUPER_USER),
+  upload.fields([{ name: 'logo', maxCount: 1 }]),
   validate(businessPromoterProfileSchema),
   upsertBusinessPromoterProfile
 );

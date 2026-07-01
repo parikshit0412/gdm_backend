@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
-import { users, userRoles } from '../db/schema';
+import { users, userRoles, jobSeekerProfiles, employerProfiles, businessPromoterProfiles } from '../db/schema';
 import { JwtPayload } from '../middleware/auth.middleware';
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -23,7 +23,12 @@ function signToken(payload: JwtPayload): string {
 // POST /api/auth/register
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body as { email: string; password: string };
+    const { email, password, role, profile } = req.body as {
+      email: string;
+      password: string;
+      role?: 'job_seeker' | 'job_poster' | 'business_promoter';
+      profile?: Record<string, unknown>;
+    };
 
     const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (existing.length > 0) {
@@ -31,19 +36,64 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Map role name to roleId
+    const ROLE_MAP: Record<string, number> = {
+      job_seeker: 1,
+      job_poster: 2,
+      business_promoter: 3,
+    };
+    const selectedRole = role || 'job_seeker';
+    const roleId = ROLE_MAP[selectedRole];
+
     const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db.insert(users).values({ email, passwordHash }).returning();
 
-    // Default role: job_seeker (roleId = 1)
-    await db.insert(userRoles).values({ userId: user.id, roleId: 1 });
+    // Assign the selected role
+    await db.insert(userRoles).values({ userId: user.id, roleId });
 
-    const token = signToken({ userId: user.id, email: user.email, roles: [1] });
+    // Create role-specific profile if profile data is provided
+    let profileData = null;
+    if (profile && Object.keys(profile).length > 0) {
+      try {
+        if (selectedRole === 'job_seeker') {
+          const { fullName, phone, location, totalExperienceYears, skills } = profile as any;
+          const [created] = await db.insert(jobSeekerProfiles).values({
+            userId: user.id,
+            fullName: fullName || undefined,
+            phone: phone || undefined,
+            location: location || undefined,
+            totalExperienceYears: totalExperienceYears ? Number(totalExperienceYears) : undefined,
+            skills: skills || undefined,
+          }).returning();
+          profileData = created;
+        } else if (selectedRole === 'job_poster') {
+          const { companyName, industry, companySize, headquarters, hrName, hrEmail, hrPhone } = profile as any;
+          const [created] = await db.insert(employerProfiles).values({
+            userId: user.id,
+            companyName, industry, companySize, headquarters, hrName, hrEmail, hrPhone,
+          }).returning();
+          profileData = created;
+        } else if (selectedRole === 'business_promoter') {
+          const { businessName, businessCategory, contactPhone, contactEmail, address, gstNumber } = profile as any;
+          const [created] = await db.insert(businessPromoterProfiles).values({
+            userId: user.id,
+            businessName, businessCategory, contactPhone, contactEmail, address, gstNumber,
+          }).returning();
+          profileData = created;
+        }
+      } catch (profileErr: any) {
+        console.error('⚠️ Profile creation failed (user created):', profileErr.message);
+        // User was created successfully — profile can be filled later
+      }
+    }
+
+    const token = signToken({ userId: user.id, email: user.email, roles: [roleId] });
     res.cookie('token', token, COOKIE_OPTIONS);
 
     res.status(201).json({
       success: true,
       message: 'Account created',
-      data: { id: user.id, email: user.email, roles: ['job_seeker'] },
+      data: { id: user.id, email: user.email, roles: [selectedRole], profile: profileData },
       token,
     });
   } catch (error: any) {
@@ -117,6 +167,26 @@ export const me = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Determine primary role to fetch profile
+    let profileCompletion = 0;
+    
+    // We assume the first role in req.user.roles is the primary role for now.
+    // 1: job_seeker, 2: job_poster, 3: business_promoter
+    if (req.user.roles && req.user.roles.length > 0) {
+      const primaryRoleId = req.user.roles[0];
+      
+      if (primaryRoleId === 1) {
+        const [profile] = await db.select().from(jobSeekerProfiles).where(eq(jobSeekerProfiles.userId, user.id)).limit(1);
+        if (profile) profileCompletion = profile.profileCompletion ?? 0;
+      } else if (primaryRoleId === 2) {
+        const [profile] = await db.select().from(employerProfiles).where(eq(employerProfiles.userId, user.id)).limit(1);
+        if (profile) profileCompletion = profile.profileCompletion ?? 0;
+      } else if (primaryRoleId === 3) {
+        const [profile] = await db.select().from(businessPromoterProfiles).where(eq(businessPromoterProfiles.userId, user.id)).limit(1);
+        if (profile) profileCompletion = profile.profileCompletion ?? 0;
+      }
+    }
+
     res.json({
       success: true,
       authenticated: true,
@@ -128,6 +198,7 @@ export const me = async (req: Request, res: Response): Promise<void> => {
         jobApplyCount: user.jobApplyCount,
         jobPostCount: user.jobPostCount,
         roles: req.user.roles,
+        profileCompletion,
         createdAt: user.createdAt,
       },
     });

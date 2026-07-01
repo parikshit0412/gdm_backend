@@ -1,9 +1,61 @@
 import { z } from 'zod';
 
+const jobSeekerExperienceSchema = z.object({
+  jobTitle: z.string(),
+  company: z.string(),
+  startDate: z.string(),
+  endDate: z.string().optional(),
+  isCurrent: z.boolean(),
+  description: z.string().optional(),
+});
+
+const jobSeekerEducationSchema = z.object({
+  degree: z.string(),
+  fieldOfStudy: z.string(),
+  institution: z.string(),
+  graduationYear: z.coerce.number().int(),
+});
+
+const jsonParsePreprocessor = (val: unknown) => {
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return val;
+    }
+  }
+  return val;
+};
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  roles: z.array(z.number()).nonempty('At least one role must be selected'),
+  profile: z.object({
+    // Job Seeker fields
+    fullName: z.string().min(2).max(255).optional(),
+    phone: z.string().max(20).optional(),
+    location: z.string().max(255).optional(),
+    currentJobTitle: z.string().max(255).optional(),
+    totalExperienceYears: z.number().int().min(0).max(60).optional(),
+    skills: z.string().max(1000).optional(),
+    // Employer fields
+    companyName: z.string().min(2).max(255).optional(),
+    industry: z.string().max(100).optional(),
+    companySize: z.enum(['1-10', '11-50', '51-200', '201-500', '500+']).optional(),
+    headquarters: z.string().max(255).optional(),
+    hrName: z.string().max(255).optional(),
+    hrEmail: z.string().email().optional(),
+    hrPhone: z.string().max(20).optional(),
+    // Business Promoter fields
+    businessName: z.string().min(2).max(255).optional(),
+    businessCategory: z.string().max(100).optional(),
+    contactPhone: z.string().max(20).optional(),
+    contactEmail: z.string().email().optional(),
+    address: z.string().max(500).optional(),
+    gstNumber: z.string().max(20).optional(),
+  }).optional(),
 });
 
 export const loginSchema = z.object({
@@ -50,40 +102,37 @@ export const jobSeekerProfileSchema = z.object({
   fullName: z.string().min(2).max(255).optional(),
   phone: z.string().max(20).optional(),
   location: z.string().max(255).optional(),
-  avatarUrl: z.string().url().optional(),
+  avatarUrl: z.string().url().or(z.literal('')).optional(),
 
-  currentJobTitle: z.string().max(255).optional(),
-  totalExperienceYears: z.number().int().min(0).max(60).optional(),
+  totalExperienceYears: z.coerce.number().int().min(0).max(60).optional(),
   expectedSalary: z.string().max(50).optional(),
   availability: z.enum(['immediate', '15_days', '1_month', '2_months']).optional(),
   summary: z.string().max(2000).optional(),
 
-  highestDegree: z.string().max(100).optional(),
-  fieldOfStudy: z.string().max(100).optional(),
-  institution: z.string().max(255).optional(),
-  graduationYear: z.number().int().min(1970).max(2100).optional(),
+  experience: z.preprocess(jsonParsePreprocessor, z.array(jobSeekerExperienceSchema)).optional(),
+  education: z.preprocess(jsonParsePreprocessor, z.array(jobSeekerEducationSchema)).optional(),
 
   skills: z.string().max(1000).optional(), // comma-separated
 
-  resumeUrl: z.string().url().optional(),
-  linkedinUrl: z.string().url().optional(),
-  githubUrl: z.string().url().optional(),
-  portfolioUrl: z.string().url().optional(),
+  resumeUrl: z.string().url().or(z.literal('')).optional(),
+  linkedinUrl: z.string().url().or(z.literal('')).optional(),
+  githubUrl: z.string().url().or(z.literal('')).optional(),
+  portfolioUrl: z.string().url().or(z.literal('')).optional(),
 });
 
 // ─── Employer Profile ─────────────────────────────────────────────────────────
 export const employerProfileSchema = z.object({
   companyName: z.string().min(2).max(255).optional(),
-  logoUrl: z.string().url().optional(),
+  logoUrl: z.string().url().or(z.literal('')).optional(),
   industry: z.string().max(100).optional(),
   companySize: z.enum(['1-10', '11-50', '51-200', '201-500', '500+']).optional(),
-  foundedYear: z.number().int().min(1800).max(2100).optional(),
+  foundedYear: z.coerce.number().int().min(1800).max(2100).optional(),
   about: z.string().max(3000).optional(),
   headquarters: z.string().max(255).optional(),
 
-  websiteUrl: z.string().url().optional(),
-  linkedinUrl: z.string().url().optional(),
-  twitterUrl: z.string().url().optional(),
+  websiteUrl: z.string().url().or(z.literal('')).optional(),
+  linkedinUrl: z.string().url().or(z.literal('')).optional(),
+  twitterUrl: z.string().url().or(z.literal('')).optional(),
 
   hrName: z.string().max(255).optional(),
   hrEmail: z.string().email().optional(),
@@ -95,16 +144,16 @@ export const businessPromoterProfileSchema = z.object({
   businessName: z.string().min(2).max(255).optional(),
   businessCategory: z.string().max(100).optional(),
   about: z.string().max(3000).optional(),
-  logoUrl: z.string().url().optional(),
+  logoUrl: z.string().url().or(z.literal('')).optional(),
 
   contactPhone: z.string().max(20).optional(),
   contactEmail: z.string().email().optional(),
   address: z.string().max(500).optional(),
 
-  websiteUrl: z.string().url().optional(),
-  linkedinUrl: z.string().url().optional(),
-  instagramUrl: z.string().url().optional(),
-  facebookUrl: z.string().url().optional(),
+  websiteUrl: z.string().url().or(z.literal('')).optional(),
+  linkedinUrl: z.string().url().or(z.literal('')).optional(),
+  instagramUrl: z.string().url().or(z.literal('')).optional(),
+  facebookUrl: z.string().url().or(z.literal('')).optional(),
 
   gstNumber: z.string().max(20).optional(),
 });

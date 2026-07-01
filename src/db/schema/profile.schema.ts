@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, integer, timestamp, text } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, integer, timestamp, text, jsonb } from 'drizzle-orm/pg-core';
 import { users } from './auth.schema';
 
 // ─── Job Seeker Profiles ──────────────────────────────────────────────────────
@@ -16,17 +16,14 @@ export const jobSeekerProfiles = pgTable('job_seeker_profiles', {
   avatarUrl: varchar('avatar_url', { length: 1000 }),
 
   // Professional
-  currentJobTitle: varchar('current_job_title', { length: 255 }),
   totalExperienceYears: integer('total_experience_years'),
   expectedSalary: varchar('expected_salary', { length: 50 }),
   availability: varchar('availability', { length: 50 }),       // 'immediate' | '15_days' | '1_month' | '2_months'
   summary: text('summary'),
 
-  // Education snapshot (full history → educations table)
-  highestDegree: varchar('highest_degree', { length: 100 }),
-  fieldOfStudy: varchar('field_of_study', { length: 100 }),
-  institution: varchar('institution', { length: 255 }),
-  graduationYear: integer('graduation_year'),
+  // Dynamic Arrays
+  experience: jsonb('experience').$type<Array<{ jobTitle: string; company: string; startDate: string; endDate?: string; isCurrent: boolean; description?: string }>>().default([]),
+  education: jsonb('education').$type<Array<{ degree: string; fieldOfStudy: string; institution: string; graduationYear: number }>>().default([]),
 
   // Skills — comma-separated string
   skills: text('skills'),
@@ -37,6 +34,8 @@ export const jobSeekerProfiles = pgTable('job_seeker_profiles', {
   githubUrl: varchar('github_url', { length: 1000 }),
   portfolioUrl: varchar('portfolio_url', { length: 1000 }),
 
+  // System
+  profileCompletion: integer('profile_completion').default(0),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -68,6 +67,8 @@ export const employerProfiles = pgTable('employer_profiles', {
   hrEmail: varchar('hr_email', { length: 255 }),
   hrPhone: varchar('hr_phone', { length: 20 }),
 
+  // System
+  profileCompletion: integer('profile_completion').default(0),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -100,6 +101,8 @@ export const businessPromoterProfiles = pgTable('business_promoter_profiles', {
   // Trust / Verification
   gstNumber: varchar('gst_number', { length: 20 }),
 
+  // System
+  profileCompletion: integer('profile_completion').default(0),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

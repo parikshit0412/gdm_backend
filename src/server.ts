@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -40,6 +41,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(passport.initialize());
+
+// Serve static files (uploads)
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
