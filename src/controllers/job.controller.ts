@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { eq, and, gt, desc } from 'drizzle-orm';
 import { db } from '../db';
-import { jobs, subscriptions, users, globalConfigs } from '../db/schema';
+import { jobs, subscriptions, users, globalConfigs, employerProfiles } from '../db/schema';
 
 const configCache = new Map<string, { value: number; expires: number }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
@@ -26,7 +26,10 @@ async function getFreeLimit(key: string): Promise<number> {
 
 // POST /api/jobs
 export const createJob = async (req: Request, res: Response): Promise<void> => {
-  const { title, description } = req.body as { title: string; description: string };
+  const { 
+    title, description, companyName, location, salaryRange, 
+    jobType, workMode, experience, skills, category, education, benefits 
+  } = req.body as any;
   const userId = req.user!.userId;
 
   // Check for active job_poster subscription
@@ -63,9 +66,32 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
       .where(eq(users.id, userId));
   }
 
+  // Fetch companyName if not provided
+  let finalCompanyName = companyName;
+  if (!finalCompanyName) {
+    const [empProfile] = await db.select().from(employerProfiles).where(eq(employerProfiles.userId, userId)).limit(1);
+    if (empProfile && empProfile.companyName) {
+      finalCompanyName = empProfile.companyName;
+    }
+  }
+
   const [job] = await db
     .insert(jobs)
-    .values({ employerId: userId, title, description })
+    .values({ 
+      employerId: userId, 
+      title, 
+      description,
+      companyName: finalCompanyName,
+      location,
+      salaryRange,
+      jobType,
+      workMode,
+      experience,
+      skills,
+      category,
+      education,
+      benefits
+    })
     .returning();
 
   res.status(201).json({ success: true, message: 'Job posted', data: job });
@@ -82,12 +108,24 @@ export const getAllJobs = async (req: Request, res: Response): Promise<void> => 
       id: jobs.id,
       title: jobs.title,
       description: jobs.description,
+      companyName: jobs.companyName,
+      location: jobs.location,
+      salaryRange: jobs.salaryRange,
+      jobType: jobs.jobType,
+      workMode: jobs.workMode,
+      experience: jobs.experience,
+      skills: jobs.skills,
+      category: jobs.category,
+      education: jobs.education,
+      benefits: jobs.benefits,
+      isActive: jobs.isActive,
       createdAt: jobs.createdAt,
       employerId: jobs.employerId,
       employerEmail: users.email,
     })
     .from(jobs)
     .innerJoin(users, eq(jobs.employerId, users.id))
+    .where(and(eq(jobs.isDeleted, false), eq(jobs.isActive, true)))
     .orderBy(desc(jobs.createdAt))
     .limit(limit)
     .offset(offset);
@@ -103,13 +141,24 @@ export const getJobById = async (req: Request, res: Response): Promise<void> => 
       id: jobs.id,
       title: jobs.title,
       description: jobs.description,
+      companyName: jobs.companyName,
+      location: jobs.location,
+      salaryRange: jobs.salaryRange,
+      jobType: jobs.jobType,
+      workMode: jobs.workMode,
+      experience: jobs.experience,
+      skills: jobs.skills,
+      category: jobs.category,
+      education: jobs.education,
+      benefits: jobs.benefits,
+      isActive: jobs.isActive,
       createdAt: jobs.createdAt,
       employerId: jobs.employerId,
       employerEmail: users.email,
     })
     .from(jobs)
     .innerJoin(users, eq(jobs.employerId, users.id))
-    .where(eq(jobs.id, id))
+    .where(and(eq(jobs.id, id), eq(jobs.isDeleted, false)))
     .limit(1);
 
   if (!job) {
@@ -139,7 +188,7 @@ export const deleteJob = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  await db.delete(jobs).where(eq(jobs.id, id));
+  await db.update(jobs).set({ isDeleted: true }).where(eq(jobs.id, id));
   res.json({ success: true, message: 'Job deleted' });
 };
 
@@ -181,4 +230,62 @@ export const applyToJob = async (req: Request, res: Response): Promise<void> => 
 
   // In a real app, you'd insert an application record here.
   res.json({ success: true, message: 'Application submitted successfully' });
+};
+
+// GET /api/jobs/employer/me
+export const getEmployerJobs = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user!.userId;
+
+  const employerJobs = await db
+    .select({
+      id: jobs.id,
+      title: jobs.title,
+      description: jobs.description,
+      companyName: jobs.companyName,
+      location: jobs.location,
+      salaryRange: jobs.salaryRange,
+      jobType: jobs.jobType,
+      workMode: jobs.workMode,
+      experience: jobs.experience,
+      skills: jobs.skills,
+      category: jobs.category,
+      education: jobs.education,
+      benefits: jobs.benefits,
+      isActive: jobs.isActive,
+      createdAt: jobs.createdAt,
+      employerId: jobs.employerId,
+      employerEmail: users.email,
+    })
+    .from(jobs)
+    .innerJoin(users, eq(jobs.employerId, users.id))
+    .where(and(eq(jobs.employerId, userId), eq(jobs.isDeleted, false)))
+    .orderBy(desc(jobs.createdAt));
+
+  res.json({ success: true, data: employerJobs });
+};
+
+// PATCH /api/jobs/:id/status
+export const toggleJobStatus = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params['id'] as string;
+  const userId = req.user!.userId;
+  const { isActive } = req.body;
+
+  if (typeof isActive !== 'boolean') {
+    res.status(400).json({ success: false, message: 'isActive must be a boolean' });
+    return;
+  }
+
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  if (!job) {
+    res.status(404).json({ success: false, message: 'Job not found' });
+    return;
+  }
+
+  if (job.employerId !== userId) {
+    res.status(403).json({ success: false, message: 'Forbidden' });
+    return;
+  }
+
+  await db.update(jobs).set({ isActive }).where(eq(jobs.id, id));
+  res.json({ success: true, message: 'Job status updated' });
 };

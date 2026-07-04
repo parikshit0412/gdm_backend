@@ -9,7 +9,7 @@ import {
   getBusinessPromoterProfile,
   upsertBusinessPromoterProfile,
 } from '../controllers/profile.controller';
-import { authenticate, requireRole, ROLES } from '../middleware/auth.middleware';
+import { authenticate, ROLES } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { upload } from '../middleware/upload.middleware';
 import {
@@ -20,18 +20,18 @@ import {
 
 const router = Router();
 
+// ── IMPORTANT: All profile routes are open to any authenticated user.
+// Each controller scopes results strictly by `userId` from the JWT,
+// so a multi-role user (e.g. roles [1,2]) can access both their
+// job-seeker AND employer profiles without needing separate tokens.
+// The profile controller itself is the security boundary — not the route guard.
+
 // ── Job Seeker Profile ────────────────────────────────────────────────────────
-router.get(
-  '/job-seeker',
-  authenticate,
-  requireRole(ROLES.JOB_SEEKER, ROLES.SUPER_USER),
-  getJobSeekerProfile
-);
+router.get('/job-seeker', authenticate, getJobSeekerProfile);
 router.put(
   '/job-seeker',
   authenticate,
-  requireRole(ROLES.JOB_SEEKER, ROLES.SUPER_USER),
-  upload.fields([{ name: 'resume', maxCount: 1 }, { name: 'avatar', maxCount: 1 }]),
+  upload.any(), // Changed to any() to support dynamic cert_file_X uploads
   validate(jobSeekerProfileSchema),
   upsertJobSeekerProfile
 );
@@ -39,17 +39,11 @@ router.put(
 router.get('/job-seeker/:userId', getJobSeekerProfileById);
 
 // ── Employer Profile ──────────────────────────────────────────────────────────
-router.get(
-  '/employer',
-  authenticate,
-  requireRole(ROLES.JOB_POSTER, ROLES.SUPER_USER),
-  getEmployerProfile
-);
+router.get('/employer', authenticate, getEmployerProfile);
 router.put(
   '/employer',
   authenticate,
-  requireRole(ROLES.JOB_POSTER, ROLES.SUPER_USER),
-  upload.fields([{ name: 'logo', maxCount: 1 }]),
+  upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'avatar', maxCount: 1 }]),
   validate(employerProfileSchema),
   upsertEmployerProfile
 );
@@ -57,17 +51,11 @@ router.put(
 router.get('/employer/:userId', getEmployerProfileById);
 
 // ── Business Promoter Profile ─────────────────────────────────────────────────
-router.get(
-  '/business-promoter',
-  authenticate,
-  requireRole(ROLES.BUSINESS_PROMOTER, ROLES.SUPER_USER),
-  getBusinessPromoterProfile
-);
+router.get('/business-promoter', authenticate, getBusinessPromoterProfile);
 router.put(
   '/business-promoter',
   authenticate,
-  requireRole(ROLES.BUSINESS_PROMOTER, ROLES.SUPER_USER),
-  upload.fields([{ name: 'logo', maxCount: 1 }]),
+  upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'avatar', maxCount: 1 }]),
   validate(businessPromoterProfileSchema),
   upsertBusinessPromoterProfile
 );

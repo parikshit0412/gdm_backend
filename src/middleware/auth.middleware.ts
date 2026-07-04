@@ -20,15 +20,15 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
     // Support both cookie and Bearer token
     let token: string | undefined;
 
-    // 1. Check HTTP-only cookie
-    if (req.cookies?.token) {
-      token = req.cookies.token as string;
+    // 1. Check Authorization header first (most explicit)
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
     }
 
-    // 2. Fallback to Authorization header
-    const authHeader = req.headers.authorization;
-    if (!token && authHeader?.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
+    // 2. Fallback to HTTP-only cookie
+    if (!token && req.cookies?.token) {
+      token = req.cookies.token as string;
     }
 
     if (!token) {
@@ -48,12 +48,14 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
 export const optionalAuthenticate = (req: Request, _res: Response, next: NextFunction): void => {
   try {
     let token: string | undefined;
-    if (req.cookies?.token) {
-      token = req.cookies.token as string;
-    }
+
     const authHeader = req.headers.authorization;
-    if (!token && authHeader?.startsWith('Bearer ')) {
+    if (authHeader?.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
+    }
+
+    if (!token && req.cookies?.token) {
+      token = req.cookies.token as string;
     }
 
     if (token) {

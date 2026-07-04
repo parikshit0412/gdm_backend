@@ -10,9 +10,20 @@ export const jobSeekerProfiles = pgTable('job_seeker_profiles', {
     .unique(),
 
   // Personal Info
-  fullName: varchar('full_name', { length: 255 }),
+  title: varchar('title', { length: 50 }),
+  firstName: varchar('first_name', { length: 100 }),
+  middleName: varchar('middle_name', { length: 100 }),
+  lastName: varchar('last_name', { length: 100 }),
   phone: varchar('phone', { length: 20 }),
-  location: varchar('location', { length: 255 }),
+  alternatePhone: varchar('alternate_phone', { length: 20 }),
+  alternateEmail: varchar('alternate_email', { length: 255 }),
+  address: jsonb('address').$type<{
+    country: string;
+    state?: string;
+    city: string;
+    zipCode?: string;
+    addressLine1?: string;
+  }>(),
   avatarUrl: varchar('avatar_url', { length: 1000 }),
 
   // Professional
@@ -22,8 +33,9 @@ export const jobSeekerProfiles = pgTable('job_seeker_profiles', {
   summary: text('summary'),
 
   // Dynamic Arrays
-  experience: jsonb('experience').$type<Array<{ jobTitle: string; company: string; startDate: string; endDate?: string; isCurrent: boolean; description?: string }>>().default([]),
+  experience: jsonb('experience').$type<Array<{ jobTitle: string; company: string; companyLocation?: string; jobType?: string; startDate: string; endDate?: string; isCurrent: boolean; description?: string }>>().default([]),
   education: jsonb('education').$type<Array<{ degree: string; fieldOfStudy: string; institution: string; graduationYear: number }>>().default([]),
+  certifications: jsonb('certifications').$type<Array<{ name: string; issuer: string; status: 'completed' | 'pursuing'; issueDate: string; expiryDate?: string; credentialId?: string; credentialUrl?: string; fileUrl?: string }>>().default([]),
 
   // Skills — comma-separated string
   skills: text('skills'),

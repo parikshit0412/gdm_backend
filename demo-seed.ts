@@ -71,7 +71,9 @@ async function seedDemoData() {
   console.log('Creating profiles...');
   await db.insert(jobSeekerProfiles).values({
     userId: seeker.id,
-    fullName: 'John Doe',
+    title: 'Mr.',
+    firstName: 'John',
+    lastName: 'Doe',
     phone: '+1 555-0100',
     location: 'San Francisco, CA',
     currentJobTitle: 'Full Stack Developer',
