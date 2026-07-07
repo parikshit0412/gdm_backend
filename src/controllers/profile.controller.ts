@@ -265,12 +265,15 @@ export const upsertBusinessPromoterProfile = async (req: Request, res: Response)
   }
 
   // Fetch current profile to calculate completion properly
+  if (updateData.foundationDate) {
+    updateData.foundationDate = new Date(updateData.foundationDate);
+  }
   const [currentProfile] = await db.select().from(businessPromoterProfiles).where(eq(businessPromoterProfiles.userId, userId)).limit(1);
   const mergedProfile = { ...(currentProfile || {}), ...updateData };
 
   // Calculate profile completion percentage
   const completionFields = [
-    'businessName', 'businessCategory', 'about', 'logoUrl', 'contactPhone', 
+    'businessName', 'businessOwnerName', 'businessCategory', 'about', 'logoUrl', 'foundationDate', 'purpose', 'contactPhone', 
     'contactEmail', 'address', 'websiteUrl', 'linkedinUrl', 'instagramUrl', 
     'facebookUrl', 'gstNumber'
   ];

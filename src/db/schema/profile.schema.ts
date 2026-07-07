@@ -95,9 +95,12 @@ export const businessPromoterProfiles = pgTable('business_promoter_profiles', {
 
   // Business Info
   businessName: varchar('business_name', { length: 255 }),
+  businessOwnerName: varchar('business_owner_name', { length: 255 }),
   businessCategory: varchar('business_category', { length: 100 }),
   about: text('about'),
   logoUrl: varchar('logo_url', { length: 1000 }),
+  foundationDate: timestamp('foundation_date'),
+  purpose: text('purpose'),
 
   // Contact
   contactPhone: varchar('contact_phone', { length: 20 }),
