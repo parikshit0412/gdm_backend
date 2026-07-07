@@ -6,7 +6,7 @@ import { db } from '../db';
 import { users, userRoles, jobSeekerProfiles, employerProfiles, businessPromoterProfiles } from '../db/schema';
 import { JwtPayload } from '../middleware/auth.middleware';
 
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: isProd, // Must be true if sameSite is none
