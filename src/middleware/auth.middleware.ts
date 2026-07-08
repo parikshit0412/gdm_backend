@@ -27,9 +27,10 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
     }
 
     // 2. Fallback to HTTP-only cookie
-    if (!token && req.cookies?.token) {
-      token = req.cookies.token as string;
-    }
+    // [COMMENTED OUT FOR REAL WORLD LOGIC: Relying on cookies cross-origin causes 3rd-party cookie blocking issues]
+    // if (!token && req.cookies?.token) {
+    //   token = req.cookies.token as string;
+    // }
 
     if (!token) {
       res.status(401).json({ success: false, message: 'No token provided' });
@@ -54,9 +55,10 @@ export const optionalAuthenticate = (req: Request, _res: Response, next: NextFun
       token = authHeader.split(' ')[1];
     }
 
-    if (!token && req.cookies?.token) {
-      token = req.cookies.token as string;
-    }
+    // [COMMENTED OUT FOR REAL WORLD LOGIC: Relying on cookies cross-origin causes 3rd-party cookie blocking issues]
+    // if (!token && req.cookies?.token) {
+    //   token = req.cookies.token as string;
+    // }
 
     if (token) {
       const secret = process.env.JWT_SECRET!;
