@@ -31,3 +31,19 @@ export const jobs = pgTable('jobs', {
   employerIdIdx: index('jobs_employer_id_idx').on(t.employerId),
   createdAtIndex: index('jobs_created_at_idx').on(t.createdAt),
 }));
+
+// ─── Job Applications ──────────────────────────────────────────────────────────
+export const jobApplications = pgTable('job_applications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  jobId: uuid('job_id')
+    .references(() => jobs.id)
+    .notNull(),
+  applicantId: uuid('applicant_id')
+    .references(() => users.id)
+    .notNull(),
+  status: varchar('status', { length: 50 }).default('pending').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => ({
+  jobIdIdx: index('job_applications_job_id_idx').on(t.jobId),
+  applicantIdIdx: index('job_applications_applicant_id_idx').on(t.applicantId),
+}));

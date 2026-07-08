@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { eq, and, gt, desc } from 'drizzle-orm';
 import { db } from '../db';
-import { jobs, subscriptions, users, globalConfigs, employerProfiles } from '../db/schema';
+import { jobs, subscriptions, users, globalConfigs, employerProfiles, jobApplications, jobSeekerProfiles } from '../db/schema';
 
 const configCache = new Map<string, { value: number; expires: number }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
@@ -95,6 +95,50 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
     .returning();
 
   res.status(201).json({ success: true, message: 'Job posted', data: job });
+};
+
+// PUT /api/jobs/:id
+export const updateJob = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params['id'] as string;
+  const userId = req.user!.userId;
+  
+  const { 
+    title, description, companyName, location, salaryRange, 
+    jobType, workMode, experience, skills, category, education, benefits 
+  } = req.body as any;
+
+  // Verify ownership
+  const [existingJob] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+  if (!existingJob) {
+    res.status(404).json({ success: false, message: 'Job not found' });
+    return;
+  }
+  
+  if (existingJob.employerId !== userId && !req.user!.roles.includes(4)) {
+    res.status(403).json({ success: false, message: 'Forbidden' });
+    return;
+  }
+
+  const [job] = await db
+    .update(jobs)
+    .set({ 
+      title, 
+      description,
+      companyName,
+      location,
+      salaryRange,
+      jobType,
+      workMode,
+      experience,
+      skills,
+      category,
+      education,
+      benefits
+    })
+    .where(eq(jobs.id, id))
+    .returning();
+
+  res.json({ success: true, message: 'Job updated', data: job });
 };
 
 // GET /api/jobs
@@ -228,7 +272,15 @@ export const applyToJob = async (req: Request, res: Response): Promise<void> => 
       .where(eq(users.id, userId));
   }
 
-  // In a real app, you'd insert an application record here.
+  const jobId = req.params['id'] as string;
+
+  // Insert application record
+  await db.insert(jobApplications).values({
+    jobId,
+    applicantId: userId,
+    status: 'pending',
+  });
+
   res.json({ success: true, message: 'Application submitted successfully' });
 };
 
@@ -262,6 +314,42 @@ export const getEmployerJobs = async (req: Request, res: Response): Promise<void
     .orderBy(desc(jobs.createdAt));
 
   res.json({ success: true, data: employerJobs });
+};
+
+// GET /api/jobs/:id/applicants
+export const getJobApplicants = async (req: Request, res: Response): Promise<void> => {
+  const jobId = req.params['id'] as string;
+  const userId = req.user!.userId;
+
+  // Verify ownership of the job
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+  if (!job) {
+    res.status(404).json({ success: false, message: 'Job not found' });
+    return;
+  }
+  if (job.employerId !== userId && !req.user!.roles.includes(4)) {
+    res.status(403).json({ success: false, message: 'Forbidden' });
+    return;
+  }
+
+  // Fetch applicants
+  const applicants = await db
+    .select({
+      id: jobApplications.id,
+      applicantId: jobApplications.applicantId,
+      status: jobApplications.status,
+      appliedAt: jobApplications.createdAt,
+      firstName: jobSeekerProfiles.firstName,
+      lastName: jobSeekerProfiles.lastName,
+      email: users.email,
+    })
+    .from(jobApplications)
+    .innerJoin(users, eq(jobApplications.applicantId, users.id))
+    .leftJoin(jobSeekerProfiles, eq(jobApplications.applicantId, jobSeekerProfiles.userId))
+    .where(eq(jobApplications.jobId, jobId))
+    .orderBy(desc(jobApplications.createdAt));
+
+  res.json({ success: true, data: applicants });
 };
 
 // PATCH /api/jobs/:id/status
