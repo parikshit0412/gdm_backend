@@ -35,7 +35,12 @@ app.set('trust proxy', 1);
 //   })
 // );
 
-app.use(cors({ origin: '*' }));
+app.use(
+  cors({
+    origin: true, // This dynamically reflects the request origin, allowing any origin
+    credentials: true, // Allows cookies/authorization headers
+  })
+);
 
 import passport from './middleware/passport';
 
