@@ -3,6 +3,8 @@ import { z } from 'zod';
 const jobSeekerExperienceSchema = z.object({
   jobTitle: z.string(),
   company: z.string(),
+  companyLocation: z.string().optional(),
+  jobType: z.string().optional(),
   startDate: z.string(),
   endDate: z.string().optional(),
   isCurrent: z.boolean(),
@@ -14,6 +16,17 @@ const jobSeekerEducationSchema = z.object({
   fieldOfStudy: z.string(),
   institution: z.string(),
   graduationYear: z.coerce.number().int(),
+});
+
+const jobSeekerCertificationSchema = z.object({
+  name: z.string().min(1, 'Certification name is required'),
+  issuer: z.string().min(1, 'Issuing organization is required'),
+  status: z.enum(['completed', 'pursuing'], { message: 'Invalid status' }),
+  issueDate: z.string().min(1, 'Issue date is required'),
+  expiryDate: z.string().optional(),
+  credentialId: z.string().optional(),
+  credentialUrl: z.string().url('Invalid credential URL').or(z.literal('')).optional(),
+  fileUrl: z.string().optional(),
 });
 
 const jsonParsePreprocessor = (val: unknown) => {
@@ -29,32 +42,47 @@ const jsonParsePreprocessor = (val: unknown) => {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const registerSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   roles: z.array(z.number()).nonempty('At least one role must be selected'),
   profile: z.object({
     // Job Seeker fields
-    fullName: z.string().min(2).max(255).optional(),
-    phone: z.string().max(20).optional(),
-    location: z.string().max(255).optional(),
-    currentJobTitle: z.string().max(255).optional(),
-    totalExperienceYears: z.number().int().min(0).max(60).optional(),
-    skills: z.string().max(1000).optional(),
+    title: z.string().min(2, 'Title must be at least 2 characters').max(50, 'Title is too long').optional(),
+    firstName: z.string().min(1, 'First name is required').max(100, 'First name is too long').optional(),
+    middleName: z.string().max(100, 'Middle name is too long').optional(),
+    lastName: z.string().min(1, 'Last name is required').max(100, 'Last name is too long').optional(),
+    phone: z.string().max(20, 'Phone number is too long').optional(),
+    currentJobTitle: z.string().max(255, 'Job title is too long').optional(),
+    totalExperienceYears: z.number().int().min(0, 'Experience cannot be negative').max(60, 'Experience is too high').optional(),
+    skills: z.string().max(1000, 'Skills list is too long').optional(),
+    
     // Employer fields
-    companyName: z.string().min(2).max(255).optional(),
-    industry: z.string().max(100).optional(),
-    companySize: z.enum(['1-10', '11-50', '51-200', '201-500', '500+']).optional(),
-    headquarters: z.string().max(255).optional(),
-    hrName: z.string().max(255).optional(),
-    hrEmail: z.string().email().optional(),
-    hrPhone: z.string().max(20).optional(),
+    companyName: z.string().min(2, 'Company name must be at least 2 characters').max(255, 'Company name is too long').optional(),
+    industry: z.string().max(100, 'Industry name is too long').optional(),
+    companySize: z.enum(['1-10', '11-50', '51-200', '201-500', '500+'], { message: 'Invalid company size' }).optional(),
+    headquarters: z.string().max(255, 'Headquarters location is too long').optional(),
+    hrName: z.string().max(255, 'HR name is too long').optional(),
+    hrEmail: z.string().email('Invalid HR email').optional().or(z.literal('')),
+    hrPhone: z.string().max(20, 'HR phone is too long').optional(),
+    
     // Business Promoter fields
-    businessName: z.string().min(2).max(255).optional(),
-    businessCategory: z.string().max(100).optional(),
-    contactPhone: z.string().max(20).optional(),
-    contactEmail: z.string().email().optional(),
-    address: z.string().max(500).optional(),
-    gstNumber: z.string().max(20).optional(),
+    businessName: z.string().min(2, 'Business name must be at least 2 characters').max(255, 'Business name is too long').optional(),
+    businessCategory: z.string().max(100, 'Category is too long').optional(),
+    contactPhone: z.string().max(20, 'Contact phone is too long').optional(),
+    contactEmail: z.string().email('Invalid contact email').optional().or(z.literal('')),
+    gstNumber: z.string().max(20, 'GST number is too long').optional(),
+
+    // Shared field: Business promoter uses string, Job seeker uses object
+    address: z.union([
+      z.string().max(500, 'Address is too long'),
+      z.object({
+        country: z.string().min(1, 'Country is required'),
+        state: z.string().optional(),
+        city: z.string().min(1, 'City is required'),
+        zipCode: z.string().optional(),
+        addressLine1: z.string().optional(),
+      })
+    ]).optional(),
   }).optional(),
 });
 
@@ -73,6 +101,16 @@ export const subscriptionSchema = z.object({
 export const createJobSchema = z.object({
   title: z.string().min(3).max(255),
   description: z.string().min(10),
+  companyName: z.string().max(255).optional(),
+  location: z.string().max(255).optional(),
+  salaryRange: z.string().max(100).optional(),
+  jobType: z.string().max(50).optional(),
+  workMode: z.string().max(50).optional(),
+  experience: z.string().max(100).optional(),
+  skills: z.string().max(1000).optional(),
+  category: z.string().max(100).optional(),
+  education: z.string().max(255).optional(),
+  benefits: z.string().max(1000).optional(),
 });
 
 // ─── Business Promotion ───────────────────────────────────────────────────────
@@ -99,18 +137,30 @@ export const assignRoleSchema = z.object({
 
 // ─── Job Seeker Profile ───────────────────────────────────────────────────────
 export const jobSeekerProfileSchema = z.object({
-  fullName: z.string().min(2).max(255).optional(),
-  phone: z.string().max(20).optional(),
-  location: z.string().max(255).optional(),
-  avatarUrl: z.string().url().or(z.literal('')).optional(),
+  title: z.string().min(2, 'Title must be at least 2 characters').max(50, 'Title is too long').optional(),
+  firstName: z.string().min(1, 'First name is required').max(100, 'First name is too long').optional(),
+  middleName: z.string().max(100, 'Middle name is too long').optional(),
+  lastName: z.string().min(1, 'Last name is required').max(100, 'Last name is too long').optional(),
+  phone: z.string().max(20, 'Phone number is too long').optional(),
+  alternatePhone: z.string().max(20, 'Alternate phone is too long').optional(),
+  alternateEmail: z.string().email('Invalid alternate email').optional().or(z.literal('')),
+  address: z.preprocess(jsonParsePreprocessor, z.object({
+    country: z.string().min(1, 'Country is required'),
+    state: z.string().optional(),
+    city: z.string().min(1, 'City is required'),
+    zipCode: z.string().optional(),
+    addressLine1: z.string().optional(),
+  })).optional(),
+  avatarUrl: z.string().url('Invalid avatar URL').or(z.literal('')).optional(),
 
-  totalExperienceYears: z.coerce.number().int().min(0).max(60).optional(),
-  expectedSalary: z.string().max(50).optional(),
-  availability: z.enum(['immediate', '15_days', '1_month', '2_months']).optional(),
-  summary: z.string().max(2000).optional(),
+  totalExperienceYears: z.coerce.number({ message: 'Experience must be a number' }).int().min(0, 'Experience cannot be negative').max(60, 'Experience is too high').optional(),
+  expectedSalary: z.string().max(50, 'Expected salary is too long').optional(),
+  availability: z.enum(['immediate', '15_days', '1_month', '2_months'], { message: 'Invalid availability selected' }).optional(),
+  summary: z.string().max(2000, 'Summary is too long').optional(),
 
   experience: z.preprocess(jsonParsePreprocessor, z.array(jobSeekerExperienceSchema)).optional(),
   education: z.preprocess(jsonParsePreprocessor, z.array(jobSeekerEducationSchema)).optional(),
+  certifications: z.preprocess(jsonParsePreprocessor, z.array(jobSeekerCertificationSchema)).optional(),
 
   skills: z.string().max(1000).optional(), // comma-separated
 

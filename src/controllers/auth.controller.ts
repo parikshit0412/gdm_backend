@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
 import { users, userRoles, jobSeekerProfiles, employerProfiles, businessPromoterProfiles } from '../db/schema';
 import { JwtPayload } from '../middleware/auth.middleware';
 
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: isProd, // Must be true if sameSite is none
@@ -56,12 +56,15 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     if (profile && Object.keys(profile).length > 0) {
       try {
         if (selectedRole === 'job_seeker') {
-          const { fullName, phone, location, totalExperienceYears, skills } = profile as any;
+          const { title, firstName, middleName, lastName, phone, address, totalExperienceYears, skills } = profile as any;
           const [created] = await db.insert(jobSeekerProfiles).values({
             userId: user.id,
-            fullName: fullName || undefined,
+            title: title || undefined,
+            firstName: firstName || undefined,
+            middleName: middleName || undefined,
+            lastName: lastName || undefined,
             phone: phone || undefined,
-            location: location || undefined,
+            address: address || undefined,
             totalExperienceYears: totalExperienceYears ? Number(totalExperienceYears) : undefined,
             skills: skills || undefined,
           }).returning();
@@ -167,25 +170,46 @@ export const me = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Determine primary role to fetch profile
-    let profileCompletion = 0;
-    
-    // We assume the first role in req.user.roles is the primary role for now.
-    // 1: job_seeker, 2: job_poster, 3: business_promoter
-    if (req.user.roles && req.user.roles.length > 0) {
-      const primaryRoleId = req.user.roles[0];
-      
-      if (primaryRoleId === 1) {
-        const [profile] = await db.select().from(jobSeekerProfiles).where(eq(jobSeekerProfiles.userId, user.id)).limit(1);
-        if (profile) profileCompletion = profile.profileCompletion ?? 0;
-      } else if (primaryRoleId === 2) {
-        const [profile] = await db.select().from(employerProfiles).where(eq(employerProfiles.userId, user.id)).limit(1);
-        if (profile) profileCompletion = profile.profileCompletion ?? 0;
-      } else if (primaryRoleId === 3) {
-        const [profile] = await db.select().from(businessPromoterProfiles).where(eq(businessPromoterProfiles.userId, user.id)).limit(1);
-        if (profile) profileCompletion = profile.profileCompletion ?? 0;
-      }
-    }
+    // Always re-fetch roles from DB so newly-added roles are reflected
+    // without requiring the user to re-login.
+    const freshRoleRows = await db
+      .select({ roleId: userRoles.roleId })
+      .from(userRoles)
+      .where(eq(userRoles.userId, user.id));
+    const userRoleIds = freshRoleRows.map((r) => r.roleId);
+
+
+    // Fetch profile completion for every role the user holds — in parallel
+    const profileCompletions: Record<string, number> = {};
+
+    await Promise.all(
+      userRoleIds.map(async (roleId) => {
+        try {
+          if (roleId === 1) {
+            const [p] = await db.select({ c: jobSeekerProfiles.profileCompletion })
+              .from(jobSeekerProfiles).where(eq(jobSeekerProfiles.userId, user.id)).limit(1);
+            profileCompletions['1'] = p?.c ?? 0;
+          } else if (roleId === 2) {
+            const [p] = await db.select({ c: employerProfiles.profileCompletion })
+              .from(employerProfiles).where(eq(employerProfiles.userId, user.id)).limit(1);
+            profileCompletions['2'] = p?.c ?? 0;
+          } else if (roleId === 3) {
+            const [p] = await db.select({ c: businessPromoterProfiles.profileCompletion })
+              .from(businessPromoterProfiles).where(eq(businessPromoterProfiles.userId, user.id)).limit(1);
+            profileCompletions['3'] = p?.c ?? 0;
+          }
+        } catch {
+          profileCompletions[String(roleId)] = 0;
+        }
+      })
+    );
+
+    // Primary completion = maximum across all roles the user holds
+    // (This prevents the overall progress bar from dropping to e.g. 40% when a user with an 80% complete profile adds a new 0% complete role)
+    const completionValues = Object.values(profileCompletions);
+    const profileCompletion = completionValues.length
+      ? Math.max(...completionValues)
+      : 0;
 
     res.json({
       success: true,
@@ -197,14 +221,66 @@ export const me = async (req: Request, res: Response): Promise<void> => {
         avatarUrl: user.avatarUrl,
         jobApplyCount: user.jobApplyCount,
         jobPostCount: user.jobPostCount,
-        roles: req.user.roles,
-        profileCompletion,
+        roles: userRoleIds,
+        profileCompletion,       // averaged — for backward compat (navbar)
+        profileCompletions,      // per-role map — for profile tabs
         createdAt: user.createdAt,
       },
     });
   } catch (error: any) {
     console.error('❌ Me error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch user profile.' });
+  }
+};
+
+// POST /api/auth/add-role
+export const addRole = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
+    const { roleId } = req.body;
+    const targetRoleId = parseInt(roleId, 10);
+    
+    if (![1, 2, 3].includes(targetRoleId)) {
+      res.status(400).json({ success: false, message: 'Invalid role ID' });
+      return;
+    }
+
+    const userId = req.user.userId;
+
+    // Check if user already has the role
+    const existingRole = await db
+      .select()
+      .from(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, targetRoleId)))
+      .limit(1);
+
+    if (existingRole.length > 0) {
+      res.json({ success: true, message: 'Role already exists' });
+      return;
+    }
+
+    // Insert new role
+    await db.insert(userRoles).values({
+      userId,
+      roleId: targetRoleId,
+    });
+
+    // Fetch updated roles
+    const roleRows = await db.select({ roleId: userRoles.roleId }).from(userRoles).where(eq(userRoles.userId, userId));
+    const roleIds = roleRows.map((r) => r.roleId);
+
+    // Issue new token
+    const token = signToken({ userId, email: req.user.email, roles: roleIds });
+    res.cookie('token', token, COOKIE_OPTIONS);
+
+    res.json({ success: true, message: 'Role added successfully' });
+  } catch (error: any) {
+    console.error('❌ Add Role error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to add role.' });
   }
 };
 

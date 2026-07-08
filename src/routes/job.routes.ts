@@ -5,6 +5,8 @@ import {
   getJobById,
   deleteJob,
   applyToJob,
+  getEmployerJobs,
+  toggleJobStatus,
 } from '../controllers/job.controller';
 import { authenticate, requireRole, ROLES } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
@@ -14,6 +16,11 @@ const router = Router();
 
 // Public
 router.get('/', getAllJobs);
+
+// Authenticated — employer specific routes
+router.get('/employer/me', authenticate, requireRole(ROLES.JOB_POSTER, ROLES.SUPER_USER), getEmployerJobs);
+router.patch('/:id/status', authenticate, requireRole(ROLES.JOB_POSTER, ROLES.SUPER_USER), toggleJobStatus);
+
 router.get('/:id', getJobById);
 
 // Authenticated — job_poster or super_user can post

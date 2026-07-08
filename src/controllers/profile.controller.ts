@@ -62,23 +62,42 @@ export const upsertJobSeekerProfile = async (req: Request, res: Response): Promi
   const userId = req.user!.userId;
   const updateData = { ...req.body };
 
-  // Handle file uploads
-  const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  // Handle file uploads (with upload.any(), req.files is an array)
+  const filesArray = req.files as Express.Multer.File[] | undefined;
   
-  if (files && files['resume'] && files['resume'].length > 0) {
-    updateData.resumeUrl = `/uploads/resumes/${files['resume'][0].filename}`;
-  }
-  
-  if (files && files['avatar'] && files['avatar'].length > 0) {
-    updateData.avatarUrl = `/uploads/avatars/${files['avatar'][0].filename}`;
+  if (filesArray && Array.isArray(filesArray)) {
+    const resumeFile = filesArray.find(f => f.fieldname === 'resume');
+    if (resumeFile) {
+      updateData.resumeUrl = `/uploads/resumes/${resumeFile.filename}`;
+    }
+    const avatarFile = filesArray.find(f => f.fieldname === 'avatar');
+    if (avatarFile) {
+      updateData.avatarUrl = `/uploads/avatars/${avatarFile.filename}`;
+    }
   }
 
-  // Parse JSON arrays if they are strings (from form-data)
+  // Parse JSON objects/arrays if they are strings (from form-data)
+  if (typeof updateData.address === 'string') {
+    try { updateData.address = JSON.parse(updateData.address); } catch (e) {}
+  }
   if (typeof updateData.experience === 'string') {
     try { updateData.experience = JSON.parse(updateData.experience); } catch (e) {}
   }
   if (typeof updateData.education === 'string') {
     try { updateData.education = JSON.parse(updateData.education); } catch (e) {}
+  }
+  if (typeof updateData.certifications === 'string') {
+    try { updateData.certifications = JSON.parse(updateData.certifications); } catch (e) {}
+  }
+
+  // Assign uploaded certificate files to their respective certification entry
+  if (filesArray && Array.isArray(filesArray) && Array.isArray(updateData.certifications)) {
+    updateData.certifications.forEach((cert: any, index: number) => {
+      const certFile = filesArray.find(f => f.fieldname === `cert_file_${index}`);
+      if (certFile) {
+        cert.fileUrl = `/uploads/resumes/${certFile.filename}`; // reusing resumes folder for simplicity
+      }
+    });
   }
 
   // Convert numeric fields if they exist in body as strings
@@ -90,7 +109,7 @@ export const upsertJobSeekerProfile = async (req: Request, res: Response): Promi
 
   // Calculate profile completion percentage
   const completionFields = [
-    'fullName', 'phone', 'location', 'avatarUrl', 'totalExperienceYears', 
+    'title', 'firstName', 'lastName', 'phone', 'alternatePhone', 'alternateEmail', 'address', 'avatarUrl', 'totalExperienceYears', 
     'expectedSalary', 'availability', 'summary', 'skills', 
     'resumeUrl', 'linkedinUrl', 'githubUrl', 'portfolioUrl'
   ];
@@ -107,9 +126,11 @@ export const upsertJobSeekerProfile = async (req: Request, res: Response): Promi
   // Add weight for dynamic arrays
   if (mergedProfile.experience && Array.isArray(mergedProfile.experience) && mergedProfile.experience.length > 0) filledFields++;
   if (mergedProfile.education && Array.isArray(mergedProfile.education) && mergedProfile.education.length > 0) filledFields++;
+  if (mergedProfile.certifications && Array.isArray(mergedProfile.certifications) && mergedProfile.certifications.length > 0) filledFields++;
 
-  // 13 standard fields + 2 arrays = 15 total weight
-  updateData.profileCompletion = Math.round((filledFields / 15) * 100);
+  // Calculate total weight based on fields + arrays
+  const totalWeight = completionFields.length + 3;
+  updateData.profileCompletion = Math.round((filledFields / totalWeight) * 100);
 
   const { isNew, data } = await upsertProfile(jobSeekerProfiles, userId, updateData);
 
@@ -244,12 +265,15 @@ export const upsertBusinessPromoterProfile = async (req: Request, res: Response)
   }
 
   // Fetch current profile to calculate completion properly
+  if (updateData.foundationDate) {
+    updateData.foundationDate = new Date(updateData.foundationDate);
+  }
   const [currentProfile] = await db.select().from(businessPromoterProfiles).where(eq(businessPromoterProfiles.userId, userId)).limit(1);
   const mergedProfile = { ...(currentProfile || {}), ...updateData };
 
   // Calculate profile completion percentage
   const completionFields = [
-    'businessName', 'businessCategory', 'about', 'logoUrl', 'contactPhone', 
+    'businessName', 'businessOwnerName', 'businessCategory', 'about', 'logoUrl', 'foundationDate', 'purpose', 'contactPhone', 
     'contactEmail', 'address', 'websiteUrl', 'linkedinUrl', 'instagramUrl', 
     'facebookUrl', 'gstNumber'
   ];

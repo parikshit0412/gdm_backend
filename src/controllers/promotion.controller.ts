@@ -5,44 +5,77 @@ import { businessPromotions, subscriptions, users } from '../db/schema';
 
 // POST /api/promotions
 export const createPromotion = async (req: Request, res: Response): Promise<void> => {
-  const { subscriptionId, businessName, bannerUrl } = req.body as {
-    subscriptionId: string;
+  const {
+    subscriptionId,
+    businessName,
+    businessOwnerName,
+    category,
+    businessDescription,
+    businessContactDetails,
+    foundationDate,
+    purpose,
+    bannerUrl
+  } = req.body as {
+    subscriptionId?: string;
     businessName: string;
-    bannerUrl: string;
+    businessOwnerName?: string;
+    category?: string;
+    businessDescription?: string;
+    businessContactDetails?: string;
+    foundationDate?: string;
+    purpose?: string;
+    bannerUrl?: string;
   };
   const userId = req.user!.userId;
 
-  // Verify the subscription belongs to this user, is business_promoter type, and is active
-  const [sub] = await db
-    .select()
-    .from(subscriptions)
-    .where(
-      and(
-        eq(subscriptions.id, subscriptionId),
-        eq(subscriptions.userId, userId),
-        eq(subscriptions.subscriptionType, 'business_promoter'),
-        eq(subscriptions.status, 'active'),
-        gt(subscriptions.expiresAt, new Date())
-      )
-    )
-    .limit(1);
+  let finalStatus = 'draft';
 
-  if (!sub) {
-    res.status(403).json({
-      success: false,
-      message: 'Valid active business_promoter subscription required',
-    });
-    return;
+  if (subscriptionId) {
+    // Verify the subscription belongs to this user, is business_promoter type, and is active
+    const [sub] = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.id, subscriptionId),
+          eq(subscriptions.userId, userId),
+          eq(subscriptions.subscriptionType, 'business_promoter'),
+          eq(subscriptions.status, 'active'),
+          gt(subscriptions.expiresAt, new Date())
+        )
+      )
+      .limit(1);
+
+    if (!sub) {
+      res.status(403).json({
+        success: false,
+        message: 'Valid active business_promoter subscription required',
+      });
+      return;
+    }
+    finalStatus = 'pending_approval';
   }
 
   const [promotion] = await db
     .insert(businessPromotions)
-    .values({ userId, subscriptionId, businessName, bannerUrl, status: 'pending_approval' })
+    .values({
+      userId,
+      subscriptionId: subscriptionId || null,
+      businessName,
+      businessOwnerName,
+      category,
+      businessDescription,
+      businessContactDetails,
+      foundationDate: foundationDate ? new Date(foundationDate) : null,
+      purpose,
+      bannerUrl: bannerUrl || null,
+      status: finalStatus
+    })
     .returning();
 
   res.status(201).json({
     success: true,
-    message: 'Promotion submitted for approval',
+    message: finalStatus === 'draft' ? 'Draft promotion created' : 'Promotion submitted for approval',
     data: promotion,
   });
 };
